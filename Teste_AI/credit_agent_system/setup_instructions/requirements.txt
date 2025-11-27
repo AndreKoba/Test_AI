@@ -1,0 +1,2 @@
+# Nenhuma biblioteca externa necessária por enquanto.
+# O projeto utiliza apenas a biblioteca padrão do Python (csv, os, sys).
