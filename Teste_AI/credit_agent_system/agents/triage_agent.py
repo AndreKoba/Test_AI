@@ -39,8 +39,8 @@ class TriageAgent:
             with open(self.data_path, mode='r', encoding='utf-8') as csvfile:
                 reader = csv.DictReader(csvfile)
                 for row in reader:
-                    # Simple validation: check if CPF and DOB match a record
-                    # Removing non-digits from CSV CPF just in case, though we expect clean data or consistent format
+                    # Validação simples: verifica se CPF e Data de Nascimento correspondem a um registro
+                    # Removendo não-dígitos do CPF do CSV apenas por precaução
                     db_cpf = row['cpf'].strip()
                     db_dob = row['data_nascimento'].strip()
                     
@@ -83,7 +83,12 @@ class TriageAgent:
                 agent = ExchangeAgent()
                 agent.process()
             elif choice == '0':
-                print("\nFoi um prazer atender você. Até a próxima!")
+                self.end_execution()
                 break
             else:
                 print("\nDesculpe, não entendi. Poderia escolher uma das opções abaixo?")
+
+    def end_execution(self):
+        """Ferramenta de encerramento para finalizar o loop de execução"""
+        print("\nSolicitação de encerramento recebida.")
+        print("Foi um prazer atender você. Até a próxima!")
