@@ -5,7 +5,6 @@ import json
 import urllib.request
 from datetime import datetime
 
-# --- Configuration & Setup ---
 st.set_page_config(page_title="Sistema de Agentes de Crédito", page_icon="🏦")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,10 +13,10 @@ CLIENTES_CSV = os.path.join(DATA_DIR, 'clientes.csv')
 SCORE_RULES_CSV = os.path.join(DATA_DIR, 'score_limite.csv')
 LOGS_CSV = os.path.join(DATA_DIR, 'solicitacoes_aumento_limite.csv')
 
-# --- Helper Functions (Logic from Agents) ---
+# --- Funções Auxiliares (Lógica dos Agentes) ---
 
 def authenticate_user(cpf_input, dob_input):
-    """Validates user against clientes.csv"""
+    """Valida usuário contra clientes.csv"""
     try:
         with open(CLIENTES_CSV, mode='r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -29,7 +28,7 @@ def authenticate_user(cpf_input, dob_input):
     return None
 
 def get_client_data(cpf):
-    """Refreshes client data from CSV"""
+    """Atualiza dados do cliente do CSV"""
     try:
         with open(CLIENTES_CSV, mode='r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -41,7 +40,7 @@ def get_client_data(cpf):
     return None
 
 def check_limit_rules(score):
-    """Checks max limit allowed for a score"""
+    """Verifica limite máximo permitido para um score"""
     max_limit = 0.0
     try:
         with open(SCORE_RULES_CSV, mode='r', encoding='utf-8') as csvfile:
@@ -58,7 +57,7 @@ def check_limit_rules(score):
     return max_limit
 
 def log_request(cpf, current, requested, status):
-    """Logs limit increase request"""
+    """Registra solicitação de aumento de limite"""
     try:
         file_exists = os.path.isfile(LOGS_CSV)
         with open(LOGS_CSV, mode='a', encoding='utf-8', newline='') as csvfile:
@@ -77,7 +76,7 @@ def log_request(cpf, current, requested, status):
         st.error(f"Erro ao logar solicitação: {e}")
 
 def calculate_score(data):
-    """Calculates credit score based on formula"""
+    """Calcula score de crédito baseado na fórmula"""
     peso_renda = 30
     peso_emprego = {"formal": 300, "autônomo": 200, "desempregado": 0}
     peso_dependentes = {0: 100, 1: 80, 2: 60, "3+": 30}
@@ -92,7 +91,7 @@ def calculate_score(data):
     part_income = (income / (expenses + 1)) * peso_renda
     part_job = peso_emprego.get(job_type, 0)
     
-    # Handle dependents key
+    # Trata chave de dependentes
     dep_key = dependents if dependents in [0, 1, 2] else "3+"
     part_dependents = peso_dependentes.get(dep_key, 30)
     
@@ -102,7 +101,7 @@ def calculate_score(data):
     return max(0, min(1000, int(raw_score)))
 
 def update_client_score(cpf, new_score):
-    """Updates score in CSV"""
+    """Atualiza score no CSV"""
     rows = []
     updated = False
     try:
@@ -126,7 +125,7 @@ def update_client_score(cpf, new_score):
     return False
 
 def get_exchange_rate(currency):
-    """Fetches exchange rate from API"""
+    """Busca taxa de câmbio da API"""
     url = "https://open.er-api.com/v6/latest/USD"
     try:
         with urllib.request.urlopen(url) as response:
@@ -137,41 +136,54 @@ def get_exchange_rate(currency):
         st.error(f"Erro de conexão: {e}")
     return None
 
+# --- Funções Auxiliares (Formatação) ---
 
 def format_currency(value):
+    """Formata float para string de moeda brasileira (ex: 1.000,00)"""
     if value is None:
         return ""
     return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 def parse_currency(value_str):
+    """Converte string de moeda brasileira para float"""
     if not value_str:
         return 0.0
     try:
+        # Remove separador de milhar (.) e substitui decimal (,) por (.)
         clean_str = value_str.replace(".", "").replace(",", ".")
         return float(clean_str)
     except ValueError:
         return 0.0
 
 def currency_input(label, key, value=0.0):
-   
+    """
+    Input de moeda customizado que formata ao perder o foco.
+    Retorna o valor float.
+    """
+    # Usa session state para gerenciar a representação de texto
     text_key = f"{key}_text"
     
+    # Inicializa valor de texto se não presente
     if text_key not in st.session_state:
         st.session_state[text_key] = format_currency(value)
 
+    # Callback para atualizar o texto formatado quando o usuário altera
     def on_change():
         raw_val = st.session_state[text_key]
         parsed = parse_currency(raw_val)
         st.session_state[text_key] = format_currency(parsed)
 
+    # O widget de input de texto
     st.text_input(
         label,
         key=text_key,
         on_change=on_change
     )
 
+    # Retorna o valor float parseado para cálculo
     return parse_currency(st.session_state[text_key])
 
+# --- Views da UI ---
 
 def view_login():
     st.header("🔐 Triagem - Login")
@@ -179,11 +191,12 @@ def view_login():
     
     with st.form("login_form"):
         cpf = st.text_input("CPF (apenas números)")
-        # Changed to date_input for automatic slash formatting
+        # Alterado para date_input para formatação automática de barras
         dob_date = st.date_input("Data de Nascimento", min_value=datetime(1900, 1, 1), format="DD/MM/YYYY")
         submit = st.form_submit_button("Entrar")
         
         if submit:
+            # Converte objeto data para string DD/MM/AAAA para match no CSV
             dob = dob_date.strftime("%d/%m/%Y")
             user = authenticate_user(cpf, dob)
             if user:
@@ -198,6 +211,7 @@ def view_login():
 def view_credit_limit():
     st.header("💳 Limite de Crédito")
     
+    # Atualiza dados
     user = get_client_data(st.session_state['cpf'])
     if not user:
         st.error("Erro ao carregar dados.")
@@ -233,6 +247,7 @@ def view_interview():
     st.write("Responda as perguntas abaixo para recalcular seu score.")
     
     with st.form("interview_form"):
+        # Substituído number_inputs por currency_input customizado
         income = currency_input("Renda Mensal (R$)", key="income_input")
         job_type = st.selectbox("Tipo de Emprego", ["formal", "autônomo", "desempregado"])
         expenses = currency_input("Despesas Fixas Mensais (R$)", key="expenses_input")
@@ -270,7 +285,7 @@ def view_exchange():
             else:
                 st.error("Moeda não encontrada ou erro de conexão.")
 
-# --- Fluxo Main ---
+# --- Fluxo Principal do App ---
 
 def main():
     if 'authenticated' not in st.session_state:
@@ -279,6 +294,7 @@ def main():
     if not st.session_state['authenticated']:
         view_login()
     else:
+        # Navegação da Sidebar
         st.sidebar.title(f"Olá, {st.session_state['user']['nome']}")
         menu = st.sidebar.radio(
             "Menu",
