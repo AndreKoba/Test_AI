@@ -137,6 +137,53 @@ def get_exchange_rate(currency):
         st.error(f"Erro de conexão: {e}")
     return None
 
+# --- Helper Functions (Formatting) ---
+
+def format_currency(value):
+    """Formats float to Brazilian currency string (e.g. 1.000,00)"""
+    if value is None:
+        return ""
+    return f"{value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def parse_currency(value_str):
+    """Parses Brazilian currency string to float"""
+    if not value_str:
+        return 0.0
+    try:
+        # Remove thousands separator (.) and replace decimal (,) with (.)
+        clean_str = value_str.replace(".", "").replace(",", ".")
+        return float(clean_str)
+    except ValueError:
+        return 0.0
+
+def currency_input(label, key, value=0.0):
+    """
+    Custom currency input that formats on blur.
+    Returns the float value.
+    """
+    # Use session state to manage the text representation
+    text_key = f"{key}_text"
+    
+    # Initialize text value if not present
+    if text_key not in st.session_state:
+        st.session_state[text_key] = format_currency(value)
+
+    # Callback to update the formatted text when user changes it
+    def on_change():
+        raw_val = st.session_state[text_key]
+        parsed = parse_currency(raw_val)
+        st.session_state[text_key] = format_currency(parsed)
+
+    # The text input widget
+    st.text_input(
+        label,
+        key=text_key,
+        on_change=on_change
+    )
+
+    # Return the parsed float value for calculation
+    return parse_currency(st.session_state[text_key])
+
 # --- UI Views ---
 
 def view_login():
@@ -145,10 +192,13 @@ def view_login():
     
     with st.form("login_form"):
         cpf = st.text_input("CPF (apenas números)")
-        dob = st.text_input("Data de Nascimento (DD/MM/AAAA)")
+        # Changed to date_input for automatic slash formatting
+        dob_date = st.date_input("Data de Nascimento", min_value=datetime(1900, 1, 1), format="DD/MM/YYYY")
         submit = st.form_submit_button("Entrar")
         
         if submit:
+            # Convert date object to DD/MM/YYYY string for CSV matching
+            dob = dob_date.strftime("%d/%m/%Y")
             user = authenticate_user(cpf, dob)
             if user:
                 st.session_state['authenticated'] = True
@@ -175,8 +225,10 @@ def view_credit_limit():
     st.metric("Seu Score", f"{int(score)}")
 
     st.subheader("Solicitar Aumento")
+    st.subheader("Solicitar Aumento")
     with st.form("limit_form"):
-        new_limit = st.number_input("Novo limite desejado (R$)", min_value=0.0, step=100.0)
+        # Replaced number_input with custom currency_input
+        new_limit = currency_input("Novo limite desejado (R$)", key="limit_input")
         submit = st.form_submit_button("Solicitar")
         
         if submit:
@@ -198,9 +250,10 @@ def view_interview():
     st.write("Responda as perguntas abaixo para recalcular seu score.")
     
     with st.form("interview_form"):
-        income = st.number_input("Renda Mensal (R$)", min_value=0.0)
+        # Replaced number_inputs with custom currency_input
+        income = currency_input("Renda Mensal (R$)", key="income_input")
         job_type = st.selectbox("Tipo de Emprego", ["formal", "autônomo", "desempregado"])
-        expenses = st.number_input("Despesas Fixas Mensais (R$)", min_value=0.0)
+        expenses = currency_input("Despesas Fixas Mensais (R$)", key="expenses_input")
         dependents = st.selectbox("Número de Dependentes", [0, 1, 2, 3]) # 3 represents 3+
         has_debts = st.radio("Possui dívidas ativas?", ["não", "sim"])
         
